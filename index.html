@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reorder Batch Summary</title>
+<style>
+:root{--bg:#f6f6f3;--card:#fff;--ink:#1a1a19;--ink2:#52514e;--muted:#6b6a65;--line:#e4e3dc;--axis:#bdbcb3;
+--reorder-bg:#fcebea;--reorder-ink:#9b2626;--reorder-bar:#d24545;
+--hold-bg:#e7f3e8;--hold-ink:#256a33;--hold-bar:#3b8a4c;--qty:#2a78d6;--thresh:#1a1a19}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141413;--card:#1d1d1c;--ink:#f0efec;--ink2:#c3c2b7;--muted:#9a9890;--line:#2e2e2b;--axis:#4a4a45;
+--reorder-bg:#3a1e1e;--reorder-ink:#f3a3a3;--reorder-bar:#e66767;--hold-bg:#1b3221;--hold-ink:#9fd0a5;--hold-bar:#5aa86a;--qty:#4b93e8;--thresh:#f0efec}}
+:root[data-theme="dark"]{--bg:#141413;--card:#1d1d1c;--ink:#f0efec;--ink2:#c3c2b7;--muted:#9a9890;--line:#2e2e2b;--axis:#4a4a45;
+--reorder-bg:#3a1e1e;--reorder-ink:#f3a3a3;--reorder-bar:#e66767;--hold-bg:#1b3221;--hold-ink:#9fd0a5;--hold-bar:#5aa86a;--qty:#4b93e8;--thresh:#f0efec}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:960px;margin:0 auto;padding:36px 16px 48px}
+.eyebrow{margin:0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+h1{margin:4px 0 8px;font-size:26px;font-weight:600;line-height:1.25}
+.rules{margin:0;color:var(--ink2);font-size:14px}
+.headline{margin:14px 0 0;font-size:15px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px}
+.table-card{margin-top:24px}
+.table-wrap{overflow-x:auto}
+table{width:100%;min-width:680px;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-size:12px;font-weight:600;color:var(--muted);text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:12px;border-bottom:1px solid var(--line);white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+.num{text-align:right}
+tr.reorder td{background:var(--reorder-bg)}
+tr.hold td{background:var(--hold-bg)}
+tr.reorder td:first-child{box-shadow:inset 4px 0 var(--reorder-bar)}
+tr.hold td:first-child{box-shadow:inset 4px 0 var(--hold-bar)}
+.pill{display:inline-block;padding:1px 10px;border:1px solid currentColor;border-radius:999px;font-size:12px;font-weight:600}
+tr.reorder .pill,tr.reorder .strong{color:var(--reorder-ink)}
+tr.hold .pill,tr.hold .strong{color:var(--hold-ink)}
+.strong{font-weight:600}
+.key{display:flex;flex-wrap:wrap;gap:16px;margin:14px 0 0;font-size:13px;color:var(--ink2)}
+.key span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:24px;margin-top:24px}
+figure{margin:0}
+figcaption h2{margin:0;font-size:16px;font-weight:600}
+figcaption p{margin:4px 0 12px;font-size:13px;color:var(--muted)}
+svg{display:block;width:100%;height:auto;font-family:inherit}
+svg .grid{stroke:var(--line)}
+svg .axis{stroke:var(--axis)}
+svg .tick{fill:var(--muted);font-size:12px}
+svg .xl{fill:var(--ink);font-size:13px;font-weight:600}
+svg .val{fill:var(--ink);font-size:13px;font-weight:600}
+svg .bar-reorder{fill:var(--reorder-bar)}
+svg .bar-hold{fill:var(--hold-bar)}
+svg .bar-qty{fill:var(--qty)}
+svg path:hover{opacity:.82}
+svg .thresh{stroke:var(--thresh);stroke-width:1.5;stroke-dasharray:6 4}
+svg .thresh-lbl{fill:var(--thresh);font-size:12px}
+footer{margin-top:24px;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Reorder decisions &middot; batch run</p>
+    <h1>Three-round reorder summary</h1>
+    <p class="rules">
+      Weekly demand = forecast &divide; <span id="wpm"></span> &nbsp;&middot;&nbsp;
+      Reorder when weeks of supply is below <span id="thr"></span>
+      (<span id="lead"></span>-week lead time + <span id="safety"></span>-week safety buffer) &nbsp;&middot;&nbsp;
+      Order up to <span id="tgt"></span> weeks of supply
+    </p>
+    <p class="headline" id="headline"></p>
+  </header>
+
+  <section class="card table-card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Round</th><th>Month</th><th class="num">Forecast</th><th class="num">Inventory</th>
+            <th class="num">Weekly demand</th><th class="num">Weeks of supply</th><th>Decision</th><th class="num">Order qty</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="key">
+      <span><i class="sw" style="background:var(--reorder-bar)"></i>REORDER NOW</span>
+      <span><i class="sw" style="background:var(--hold-bar)"></i>HOLD</span>
+    </div>
+  </section>
+
+  <section class="charts">
+    <figure class="card">
+      <figcaption>
+        <h2>Weeks of supply by round</h2>
+        <p>Bars below the dashed line trigger a reorder.</p>
+      </figcaption>
+      <svg id="wosChart" role="img" aria-label="Weeks of supply for each round compared with the reorder threshold"></svg>
+    </figure>
+    <figure class="card">
+      <figcaption>
+        <h2>Order quantity by round</h2>
+        <p id="qtyNote">Units to order to restock to the target.</p>
+      </figcaption>
+      <svg id="qtyChart" role="img" aria-label="Order quantity for each round"></svg>
+    </figure>
+  </section>
+
+  <footer id="foot"></footer>
+</main>
+
+<script id="data" type="application/json">{"rounds":[{"round":"A","month":"July","source":"round_A.txt","forecast":1544,"inventory":1450,"weekly":356.58,"wos":4.07,"target":2852.66,"decision":"HOLD","qty":0},{"round":"B","month":"October","source":"round_B.txt","forecast":1046,"inventory":700,"weekly":241.57,"wos":2.9,"target":1932.56,"decision":"REORDER NOW","qty":1233},{"round":"C","month":"January","source":"round_C.txt","forecast":890,"inventory":620,"weekly":205.54,"wos":3.02,"target":1644.34,"decision":"REORDER NOW","qty":1025}],"config":{"weeksPerMonth":4.33,"lead":3,"safety":1,"threshold":4,"target":8,"generated":"October 9, 2026 1:40 PM"}}</script>
+<script>
+const { rounds, config } = JSON.parse(document.getElementById('data').textContent);
+const NS = 'http://www.w3.org/2000/svg';
+const fmt0 = n => n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+const fmt2 = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const isReorder = r => r.decision === 'REORDER NOW';
+
+for (const [id, v] of [['wpm', config.weeksPerMonth], ['thr', config.threshold], ['lead', config.lead],
+                        ['safety', config.safety], ['tgt', config.target]]) {
+  document.getElementById(id).textContent = v;
+}
+
+const reorders = rounds.filter(isReorder);
+const totalQty = reorders.reduce((s, r) => s + r.qty, 0);
+document.getElementById('headline').textContent =
+  `${reorders.length} of ${rounds.length} rounds need a reorder, totaling ${fmt0(totalQty)} units.`;
+
+const tbody = document.getElementById('rows');
+for (const r of rounds) {
+  const tr = document.createElement('tr');
+  tr.className = isReorder(r) ? 'reorder' : 'hold';
+  const cells = [
+    ['Round ' + r.round, 'strong'], [r.month, ''], [fmt0(r.forecast), 'num'], [fmt0(r.inventory), 'num'],
+    [fmt2(r.weekly), 'num'], [fmt2(r.wos), 'num'], [null, ''], [fmt0(r.qty), 'num strong']
+  ];
+  for (const [text, cls] of cells) {
+    const td = document.createElement('td');
+    if (cls) td.className = cls;
+    if (text === null) {
+      const pill = document.createElement('span');
+      pill.className = 'pill';
+      pill.textContent = r.decision;
+      td.appendChild(pill);
+    } else {
+      td.textContent = text;
+    }
+    tr.appendChild(td);
+  }
+  tbody.appendChild(tr);
+}
+
+function add(parent, tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  parent.appendChild(e);
+  return e;
+}
+
+function barPath(x, y, w, h, r) {
+  r = Math.min(r, h, w / 2);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+}
+
+function barChart(svg, { values, max, step, tickFmt, barClass, valueText, tip, threshold }) {
+  const W = 400, H = 270, m = { l: 52, r: 12, t: 28, b: 48 };
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const ph = H - m.t - m.b, pw = W - m.l - m.r;
+  const y = v => m.t + ph - (v / max) * ph;
+
+  for (let v = 0; v <= max + 1e-9; v += step) {
+    add(svg, 'line', { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: v === 0 ? 'axis' : 'grid' });
+    add(svg, 'text', { x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'tick' }, tickFmt(v));
+  }
+
+  const band = pw / values.length, bw = Math.min(64, band * 0.5);
+  values.forEach((v, i) => {
+    const cx = m.l + band * i + band / 2;
+    if (v > 0) {
+      const bar = add(svg, 'path', { d: barPath(cx - bw / 2, y(v), bw, y(0) - y(v), 4), class: barClass(i) });
+      add(bar, 'title', {}, tip(i));
+    }
+    add(svg, 'text', { x: cx, y: y(v) - 8, 'text-anchor': 'middle', class: 'val' }, valueText(i));
+    add(svg, 'text', { x: cx, y: H - m.b + 20, 'text-anchor': 'middle', class: 'xl' }, 'Round ' + rounds[i].round);
+    add(svg, 'text', { x: cx, y: H - m.b + 36, 'text-anchor': 'middle', class: 'tick' }, rounds[i].month);
+  });
+
+  if (threshold != null) {
+    add(svg, 'line', { x1: m.l, x2: W - m.r, y1: y(threshold), y2: y(threshold), class: 'thresh' });
+    add(svg, 'text', { x: W - m.r, y: y(threshold) - 6, 'text-anchor': 'end', class: 'thresh-lbl' },
+      `${threshold}-week threshold`);
+  }
+}
+
+const wos = rounds.map(r => r.wos);
+barChart(document.getElementById('wosChart'), {
+  values: wos,
+  max: Math.ceil(Math.max(config.threshold, ...wos) + 0.5),
+  step: 1,
+  tickFmt: v => v + ' wk',
+  barClass: i => isReorder(rounds[i]) ? 'bar-reorder' : 'bar-hold',
+  valueText: i => fmt2(wos[i]) + ' wks',
+  tip: i => `Round ${rounds[i].round} (${rounds[i].month}): ${fmt2(wos[i])} weeks of supply, ${rounds[i].decision}`,
+  threshold: config.threshold
+});
+
+const qty = rounds.map(r => r.qty);
+const qStep = Math.max(...qty) > 2000 ? 1000 : 500;
+barChart(document.getElementById('qtyChart'), {
+  values: qty,
+  max: Math.max(qStep, Math.ceil(Math.max(...qty) * 1.15 / qStep) * qStep),
+  step: qStep,
+  tickFmt: fmt0,
+  barClass: () => 'bar-qty',
+  valueText: i => qty[i] > 0 ? fmt0(qty[i]) + ' units' : '0 (HOLD)',
+  tip: i => `Round ${rounds[i].round} (${rounds[i].month}): order ${fmt0(qty[i])} units`
+});
+
+document.getElementById('foot').textContent =
+  `Generated ${config.generated} by reorder_tool.ps1 -Batch from ${rounds.map(r => r.source).join(', ')}.`;
+</script>
+</body>
+</html>
