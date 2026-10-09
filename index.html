@@ -93,7 +93,7 @@ footer{margin-top:24px;font-size:12px;color:var(--muted)}
     <figure class="card">
       <figcaption>
         <h2>Weeks of supply by round</h2>
-        <p>Bars below the dashed line trigger a reorder.</p>
+        <p>Dashed line = <span id="thrCap"></span>-week reorder threshold. Bars below it trigger a reorder.</p>
       </figcaption>
       <svg id="wosChart" role="img" aria-label="Weeks of supply for each round compared with the reorder threshold"></svg>
     </figure>
@@ -109,7 +109,7 @@ footer{margin-top:24px;font-size:12px;color:var(--muted)}
   <footer id="foot"></footer>
 </main>
 
-<script id="data" type="application/json">{"rounds":[{"round":"A","month":"July","forecast":1544,"inventory":1450,"weekly":356.58,"wos":4.07,"target":2852.66,"decision":"HOLD","qty":0},{"round":"B","month":"October","forecast":1046,"inventory":700,"weekly":241.57,"wos":2.9,"target":1932.56,"decision":"REORDER NOW","qty":1233},{"round":"C","month":"January","forecast":890,"inventory":620,"weekly":205.54,"wos":3.02,"target":1644.34,"decision":"REORDER NOW","qty":1025}],"config":{"weeksPerMonth":4.33,"lead":3,"safety":1,"threshold":4,"target":8,"generated":"October 9, 2026 2:01 PM","source":"rounds_summary_data.txt"}}</script>
+<script id="data" type="application/json">{"rounds":[{"round":"A","month":"July","forecast":1544,"inventory":1450,"weekly":356.58,"wos":4.07,"target":2852.66,"decision":"HOLD","qty":0},{"round":"B","month":"October","forecast":1046,"inventory":700,"weekly":241.57,"wos":2.9,"target":1932.56,"decision":"REORDER NOW","qty":1233},{"round":"C","month":"January","forecast":890,"inventory":620,"weekly":205.54,"wos":3.02,"target":1644.34,"decision":"REORDER NOW","qty":1025},{"round":"D","month":"February","forecast":1500,"inventory":400,"weekly":346.42,"wos":1.15,"target":2771.36,"decision":"REORDER NOW","qty":2372},{"round":"E","month":"March","forecast":1300,"inventory":1350,"weekly":300.23,"wos":4.5,"target":2401.85,"decision":"HOLD","qty":0},{"round":"F","month":"April","forecast":1100,"inventory":550,"weekly":254.04,"wos":2.17,"target":2032.33,"decision":"REORDER NOW","qty":1483}],"config":{"weeksPerMonth":4.33,"lead":3,"safety":1,"threshold":4,"target":8,"generated":"October 9, 2026 2:05 PM","source":"rounds_summary_data.txt"}}</script>
 <script>
 const { rounds, config } = JSON.parse(document.getElementById('data').textContent);
 const NS = 'http://www.w3.org/2000/svg';
@@ -118,7 +118,7 @@ const fmt2 = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumF
 const isReorder = r => r.decision === 'REORDER NOW';
 
 for (const [id, v] of [['wpm', config.weeksPerMonth], ['thr', config.threshold], ['lead', config.lead],
-                        ['safety', config.safety], ['tgt', config.target]]) {
+                        ['safety', config.safety], ['tgt', config.target], ['thrCap', config.threshold]]) {
   document.getElementById(id).textContent = v;
 }
 
@@ -176,21 +176,22 @@ function barChart(svg, { values, max, step, tickFmt, barClass, valueText, tip, t
   }
 
   const band = pw / values.length, bw = Math.min(64, band * 0.5);
+  const compact = band < 75;   // with many rounds, shorten labels so neighbors don't collide
   values.forEach((v, i) => {
     const cx = m.l + band * i + band / 2;
     if (v > 0) {
       const bar = add(svg, 'path', { d: barPath(cx - bw / 2, y(v), bw, y(0) - y(v), 4), class: barClass(i) });
       add(bar, 'title', {}, tip(i));
     }
-    add(svg, 'text', { x: cx, y: y(v) - 8, 'text-anchor': 'middle', class: 'val' }, valueText(i));
-    add(svg, 'text', { x: cx, y: H - m.b + 20, 'text-anchor': 'middle', class: 'xl' }, 'Round ' + rounds[i].round);
-    add(svg, 'text', { x: cx, y: H - m.b + 36, 'text-anchor': 'middle', class: 'tick' }, rounds[i].month);
+    add(svg, 'text', { x: cx, y: y(v) - 8, 'text-anchor': 'middle', class: 'val' }, valueText(i, compact));
+    add(svg, 'text', { x: cx, y: H - m.b + 20, 'text-anchor': 'middle', class: 'xl' },
+      (compact ? '' : 'Round ') + rounds[i].round);
+    add(svg, 'text', { x: cx, y: H - m.b + 36, 'text-anchor': 'middle', class: 'tick' },
+      compact ? rounds[i].month.slice(0, 3) : rounds[i].month);
   });
 
   if (threshold != null) {
     add(svg, 'line', { x1: m.l, x2: W - m.r, y1: y(threshold), y2: y(threshold), class: 'thresh' });
-    add(svg, 'text', { x: W - m.r, y: y(threshold) - 6, 'text-anchor': 'end', class: 'thresh-lbl' },
-      `${threshold}-week threshold`);
   }
 }
 
@@ -201,7 +202,7 @@ barChart(document.getElementById('wosChart'), {
   step: 1,
   tickFmt: v => v + ' wk',
   barClass: i => isReorder(rounds[i]) ? 'bar-reorder' : 'bar-hold',
-  valueText: i => fmt2(wos[i]) + ' wks',
+  valueText: (i, compact) => fmt2(wos[i]) + (compact ? '' : ' wks'),
   tip: i => `Round ${rounds[i].round} (${rounds[i].month}): ${fmt2(wos[i])} weeks of supply, ${rounds[i].decision}`,
   threshold: config.threshold
 });
@@ -214,7 +215,7 @@ barChart(document.getElementById('qtyChart'), {
   step: qStep,
   tickFmt: fmt0,
   barClass: () => 'bar-qty',
-  valueText: i => qty[i] > 0 ? fmt0(qty[i]) + ' units' : '0 (HOLD)',
+  valueText: (i, compact) => qty[i] > 0 ? fmt0(qty[i]) + (compact ? '' : ' units') : (compact ? 'HOLD' : '0 (HOLD)'),
   tip: i => `Round ${rounds[i].round} (${rounds[i].month}): order ${fmt0(qty[i])} units`
 });
 
