@@ -61,7 +61,7 @@ footer{margin-top:24px;font-size:12px;color:var(--muted)}
 <main>
   <header>
     <p class="eyebrow">Reorder decisions &middot; batch run</p>
-    <h1>Three-round reorder summary</h1>
+    <h1>Reorder summary: <span id="roundCount"></span> rounds</h1>
     <p class="rules">
       Weekly demand = forecast &divide; <span id="wpm"></span> &nbsp;&middot;&nbsp;
       Reorder when weeks of supply is below <span id="thr"></span>
@@ -109,7 +109,7 @@ footer{margin-top:24px;font-size:12px;color:var(--muted)}
   <footer id="foot"></footer>
 </main>
 
-<script id="data" type="application/json">{"rounds":[{"round":"A","month":"July","source":"round_A.txt","forecast":1544,"inventory":1450,"weekly":356.58,"wos":4.07,"target":2852.66,"decision":"HOLD","qty":0},{"round":"B","month":"October","source":"round_B.txt","forecast":1046,"inventory":700,"weekly":241.57,"wos":2.9,"target":1932.56,"decision":"REORDER NOW","qty":1233},{"round":"C","month":"January","source":"round_C.txt","forecast":890,"inventory":620,"weekly":205.54,"wos":3.02,"target":1644.34,"decision":"REORDER NOW","qty":1025}],"config":{"weeksPerMonth":4.33,"lead":3,"safety":1,"threshold":4,"target":8,"generated":"October 9, 2026 1:40 PM"}}</script>
+<script id="data" type="application/json">{"rounds":[{"round":"A","month":"July","forecast":1544,"inventory":1450,"weekly":356.58,"wos":4.07,"target":2852.66,"decision":"HOLD","qty":0},{"round":"B","month":"October","forecast":1046,"inventory":700,"weekly":241.57,"wos":2.9,"target":1932.56,"decision":"REORDER NOW","qty":1233},{"round":"C","month":"January","forecast":890,"inventory":620,"weekly":205.54,"wos":3.02,"target":1644.34,"decision":"REORDER NOW","qty":1025},{"round":"D","month":"February","forecast":1500,"inventory":400,"weekly":346.42,"wos":1.15,"target":2771.36,"decision":"REORDER NOW","qty":2372}],"config":{"weeksPerMonth":4.33,"lead":3,"safety":1,"threshold":4,"target":8,"generated":"October 9, 2026 1:56 PM","source":"rounds_summary_data.txt"}}</script>
 <script>
 const { rounds, config } = JSON.parse(document.getElementById('data').textContent);
 const NS = 'http://www.w3.org/2000/svg';
@@ -219,7 +219,8 @@ barChart(document.getElementById('qtyChart'), {
 });
 
 document.getElementById('foot').textContent =
-  `Generated ${config.generated} by reorder_tool.ps1 -Batch from ${rounds.map(r => r.source).join(', ')}.`;
+  `Generated ${config.generated} by reorder_tool.ps1 -Batch from ${config.source}.`;
+document.getElementById('roundCount').textContent = rounds.length;
 </script>
 </body>
 </html>
